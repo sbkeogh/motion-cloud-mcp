@@ -1,183 +1,209 @@
-const express = require('express');
-const cors = require('cors');
 
-const app = express();
+  const express = require('express');
+  const cors = require('cors');
 
-// Enable CORS for all origins
-app.use(cors());
-app.use(express.json());
+  const app = express();
 
-const MOTION_API_KEY = process.env.MOTION_API_KEY;
-const MOTION_BASE_URL = "https://api.usemotion.com/v1";
+  // Enable CORS for all origins
+  app.use(cors());
+  app.use(express.json());
 
-// Helper function to make Motion API requests
-async function makeMotionRequest(endpoint, options = {}) {
-  const response = await fetch(`${MOTION_BASE_URL}/${endpoint}`, {
-    ...options,
-    headers: {
-      'X-API-Key': MOTION_API_KEY,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  const MOTION_API_KEY = process.env.MOTION_API_KEY;
+  const MOTION_BASE_URL = "https://api.usemotion.com/v1";
 
-  if (!response.ok) {
-    throw new Error(`Motion API error: ${response.status} ${response.statusText}`);
+  // Helper function to make Motion API requests
+  async function makeMotionRequest(endpoint, options = {}) {
+    const response = await fetch(`${MOTION_BASE_URL}/${endpoint}`, {
+      ...options,
+      headers: {
+        'X-API-Key': MOTION_API_KEY,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Motion API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
   }
 
-  return response.json();
-}
+  // MCP Server Implementation
+  // Handle GET request for MCP server info
+  app.get('/mcp', (req, res) => {
+    res.json({
+      name: 'Motion.ai MCP Server',
+      version: '1.0.0',
+      description: 'MCP server for Motion.ai task management',
+      protocol: 'mcp',
+      capabilities: {
+        tools: true
+      }
+    });
+  });
 
-// MCP Server Implementation
-app.post('/mcp', async (req, res) => {
-  try {
-    const { method, params } = req.body;
+  app.post('/mcp', async (req, res) => {
+    try {
+      const { method, params } = req.body;
 
-    switch (method) {
-      case 'tools/list':
-        return res.json({
-          tools: [
-            {
-              name: 'motion_get_workspaces',
-              description: 'Get all workspaces from Motion.ai',
-              inputSchema: {
-                type: 'object',
-                properties: {},
-                required: []
-              }
+      switch (method) {
+        case 'initialize':
+          return res.json({
+            serverInfo: {
+              name: 'Motion.ai MCP Server',
+              version: '1.0.0'
             },
-            {
-              name: 'motion_get_tasks',
-              description: 'Get tasks from Motion.ai',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  workspaceId: {
-                    type: 'string',
-                    description: 'Optional workspace ID to filter tasks'
-                  }
-                },
-                required: []
-              }
-            },
-            {
-              name: 'motion_create_task',
-              description: 'Create a new task in Motion.ai',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  name: {
-                    type: 'string',
-                    description: 'Task name'
+            capabilities: {
+              tools: {}
+            }
+          });
+
+        case 'tools/list':
+          return res.json({
+            tools: [
+              {
+                name: 'motion_get_workspaces',
+                description: 'Get all workspaces from Motion.ai',
+                inputSchema: {
+                  type: 'object',
+                  properties: {},
+                  required: []
+                }
+              },
+              {
+                name: 'motion_get_tasks',
+                description: 'Get tasks from Motion.ai',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    workspaceId: {
+                      type: 'string',
+                      description: 'Optional workspace ID to filter tasks'
+                    }
                   },
-                  priority: {
-                    type: 'string',
-                    description: 'Task priority (LOW, MEDIUM, HIGH)',
-                    enum: ['LOW', 'MEDIUM', 'HIGH']
+                  required: []
+                }
+              },
+              {
+                name: 'motion_create_task',
+                description: 'Create a new task in Motion.ai',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    name: {
+                      type: 'string',
+                      description: 'Task name'
+                    },
+                    priority: {
+                      type: 'string',
+                      description: 'Task priority (LOW, MEDIUM, HIGH)',
+                      enum: ['LOW', 'MEDIUM', 'HIGH']
+                    },
+                    description: {
+                      type: 'string',
+                      description: 'Optional task description'
+                    },
+                    workspaceId: {
+                      type: 'string',
+                      description: 'Optional workspace ID'
+                    }
                   },
-                  description: {
-                    type: 'string',
-                    description: 'Optional task description'
-                  },
-                  workspaceId: {
-                    type: 'string',
-                    description: 'Optional workspace ID'
-                  }
-                },
-                required: ['name']
+                  required: ['name']
+                }
               }
-            }
-          ]
-        });
+            ]
+          });
 
-      case 'tools/call':
-        const { name, arguments: args } = params;
-        
-        switch (name) {
-          case 'motion_get_workspaces':
-            const workspacesData = await makeMotionRequest('workspaces');
-            return res.json({
-              content: [{
-                type: 'text',
-                text: JSON.stringify(workspacesData.workspaces || [], null, 2)
-              }]
-            });
+        case 'tools/call':
+          const { name, arguments: args } = params;
 
-          case 'motion_get_tasks':
-            let tasksEndpoint = 'tasks';
-            if (args?.workspaceId) {
-              tasksEndpoint += `?workspaceId=${args.workspaceId}`;
-            }
-            const tasksData = await makeMotionRequest(tasksEndpoint);
-            return res.json({
-              content: [{
-                type: 'text',
-                text: JSON.stringify(tasksData.tasks || [], null, 2)
-              }]
-            });
+          switch (name) {
+            case 'motion_get_workspaces':
+              const workspacesData = await makeMotionRequest('workspaces');
+              return res.json({
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify(workspacesData.workspaces || [], null, 2)
+                }]
+              });
 
-          case 'motion_create_task':
-            // Get default workspace if none provided
-            let workspaceId = args.workspaceId;
-            if (!workspaceId) {
-              const workspacesResponse = await makeMotionRequest('workspaces');
-              const workspaces = workspacesResponse.workspaces || [];
-              if (workspaces.length > 0) {
-                workspaceId = workspaces[0].id;
-              } else {
-                throw new Error('No workspaces available');
+            case 'motion_get_tasks':
+              let tasksEndpoint = 'tasks';
+              if (args?.workspaceId) {
+                tasksEndpoint += `?workspaceId=${args.workspaceId}`;
               }
-            }
+              const tasksData = await makeMotionRequest(tasksEndpoint);
+              return res.json({
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify(tasksData.tasks || [], null, 2)
+                }]
+              });
 
-            const taskData = {
-              name: args.name,
-              workspaceId: workspaceId,
-              priority: (args.priority || 'MEDIUM').toUpperCase()
-            };
+            case 'motion_create_task':
+              // Get default workspace if none provided
+              let workspaceId = args.workspaceId;
+              if (!workspaceId) {
+                const workspacesResponse = await makeMotionRequest('workspaces');
+                const workspaces = workspacesResponse.workspaces || [];
+                if (workspaces.length > 0) {
+                  workspaceId = workspaces[0].id;
+                } else {
+                  throw new Error('No workspaces available');
+                }
+              }
 
-            if (args.description) {
-              taskData.description = args.description;
-            }
+              const taskData = {
+                name: args.name,
+                workspaceId: workspaceId,
+                priority: (args.priority || 'MEDIUM').toUpperCase()
+              };
 
-            const newTask = await makeMotionRequest('tasks', {
-              method: 'POST',
-              body: JSON.stringify(taskData)
-            });
+              if (args.description) {
+                taskData.description = args.description;
+              }
 
-            return res.json({
-              content: [{
-                type: 'text',
-                text: `✅ Task "${newTask.name}" created successfully!\nTask ID: ${newTask.id}\nPriority: ${newTask.priority}`
-              }]
-            });
+              const newTask = await makeMotionRequest('tasks', {
+                method: 'POST',
+                body: JSON.stringify(taskData)
+              });
 
-          default:
-            throw new Error(`Unknown tool: ${name}`);
-        }
+              return res.json({
+                content: [{
+                  type: 'text',
+                  text: `✅ Task "${newTask.name}" created successfully!\nTask ID: ${newTask.id}\nPriority: 
+  ${newTask.priority}`
+                }]
+              });
 
-      default:
-        return res.status(400).json({ error: `Unknown method: ${method}` });
-    }
-  } catch (error) {
-    console.error('MCP Error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
+            default:
+              throw new Error(`Unknown tool: ${name}`);
+          }
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'Motion.ai MCP Server' });
-});
-
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Motion.ai MCP Server',
-    endpoints: {
-      mcp: '/mcp',
-      health: '/health'
+        default:
+          return res.status(400).json({ error: `Unknown method: ${method}` });
+      }
+    } catch (error) {
+      console.error('MCP Error:', error);
+      return res.status(500).json({ error: error.message });
     }
   });
-});
 
-module.exports = app;
+  // Health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({ status: 'ok', service: 'Motion.ai MCP Server' });
+  });
+
+  // Root endpoint
+  app.get('/', (req, res) => {
+    res.json({
+      message: 'Motion.ai MCP Server',
+      endpoints: {
+        mcp: '/mcp',
+        health: '/health'
+      }
+    });
+  });
+
+  module.exports = app;
